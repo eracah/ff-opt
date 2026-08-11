@@ -15,24 +15,22 @@ warnings.filterwarnings("ignore")
 #write code to add certain draft picks to your bench
 
 class ff_opt(object):
-    def __init__(self, QB=1, RB=3, WR=3, TE=1, DST=1, Budget=189, process_keepers=True):
-        self._set_up(QB, RB, WR, TE, DST, Budget, process_keepers)
+    def __init__(self, QB=1, RB=3, WR=3, TE=1, DST=1, Budget=189, process_keepers=True, restore=False):
+        self._set_up(QB, RB, WR, TE, DST, Budget, process_keepers, restore)
 
-    def _set_up(self,QB=1, RB=3, WR=3, TE=1, DST=1, Budget=189, process_keepers=True):
+    def _set_up(self,QB=1, RB=3, WR=3, TE=1, DST=1, Budget=189, process_keepers=True, restore=False):
         Tot = QB + RB + WR + TE + DST
         self.row_dict = dict(QB=QB, RB=RB, WR=WR, TE=TE,DST=DST, Budget=Budget, Tot=Tot)
-        projs = pd.read_csv("csv_files/proj.csv",
-                            names=["player", "points"],
-                            usecols=["points", "player"])
-        prices = pd.read_csv("csv_files/prices.csv",
-                            names=["player", "pos", "price"])
-        self.df = pd.merge(projs, prices, on="player")
-        
-        self.df.drop(self.df[self.df['pos'] == 'K'].index, inplace=True)
+        price_projs = pd.read_csv("csv_files/price_proj.csv",
+                            names=["player","pos", "price","points"],
+                            usecols=["player","pos", "price","points"])
+        self.df = price_projs
         self.my_points = 0
         self.run_opt(quiet=True)
         if process_keepers:
             self.process_keepers("csv_files/keepers.csv")
+        if restore:
+            self.restore()
 
 
     def restore(self, my_file="csv_files/my_team.csv",
@@ -63,7 +61,7 @@ class ff_opt(object):
         print("After restoring the optimal lineup to draft is:")
         self.run_opt()
 
-    def bench_opt(self, QB=3, RB=4, WR=7, TE=2, DST=0, total_budget=200, process_keepers=True):
+    def bench_opt(self, QB=3, RB=4, WR=6, TE=2, DST=1, total_budget=200, process_keepers=True):
         self._set_up(QB, RB, WR, TE, DST, Budget=total_budget, process_keepers=process_keepers)
         self.restore()
 
@@ -188,7 +186,7 @@ class ff_opt(object):
         temp_df = self.df[self.df.player != player_name]
 
         if quiet:
-            _, proj_points, my_proj_points = self._run_opt(df=temp_df, row_dict=self.row_dict)
+            _, proj_points, my_proj_points = self._run_opt(df=temp_df, row_dict=self.row_dict)   
         else:
             _, proj_points, my_proj_points = self.run_opt(df=temp_df, row_dict=self.row_dict, quiet=quiet)
             print("what if they got: ", player_name)
@@ -314,8 +312,10 @@ class ff_opt(object):
         df_view = df_view[df_view.max_price_id_pay_rn > 0]
         print(df_view)
               
-    def get_pos_max_prices(self, pos_str):
-        pos_view = self.df[self.df.pos == pos_str]
+    def get_pos_max_prices(self, pos_str, df=None):
+        if df is None:
+            df = self.df
+        pos_view = df[df.pos == pos_str]
         self.get_max_prices(pos_view)
         
     def allmax(self):

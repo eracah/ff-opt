@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints/
+
+# per-season draft data (prices, projections, keepers, live picks) — local only
+csv_files/
+foo/
+20[0-9][0-9]/
