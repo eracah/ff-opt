@@ -16,7 +16,19 @@ streamlit run app.py
 Run this from the repo root, since it reads/writes `csv_files/` using relative paths.
 Set your roster size and budget in the sidebar and click **Start Draft**, then log
 picks as they happen — the optimal remaining lineup, max bid per player, and
-score-dropoff-if-outbid all recompute live.
+score-dropoff-if-outbid all recompute live. The **League** tab tracks every team's
+roster, spend, and projected points the same way, assuming everyone drafts with the
+budget you configured.
+
+The sidebar also shows a live **market inflation** multiplier: real dollars left in
+the league (assuming everyone has the same budget) divided by the projected cost of
+what's left in the pool. It's damped by how much of the league's total budget has
+actually been spent, so it stays near 1.0x early in the draft and only fully kicks in
+once there's enough real pricing data to trust. This multiplier is what the optimizer
+actually uses for its budget constraint and max/min-price guidance — the `proj_price`
+column (from `price_proj.csv`) is shown alongside `adj_price` wherever both are
+relevant, so you can see the pre-draft estimate and the live-adjusted number
+together.
 
 ### CSV files (in `csv_files/`)
 
@@ -35,5 +47,11 @@ All files are headerless CSVs.
   these as you record picks (`player,price` and `player` respectively), so you can
   close and reopen the app mid-draft. Check "Resume from saved picks" in the sidebar
   to reload them on startup. Delete both (or move them aside) to start a season fresh.
+* **`owners.csv`** (optional) — the other teams in your league, one name per line.
+  Populates the "Team" dropdown that's required whenever you record a "they got
+  them" pick in the GUI.
+* **`their_team_owners.csv`** (auto-generated) — `player,team,price` rows the app
+  writes each time you record who got a player and what they paid, so the Picks Log
+  tab can show which team has whom and for how much.
 
 None of these are committed to git — see `.gitignore`.
