@@ -14,8 +14,15 @@ streamlit run app.py
 ```
 
 Run this from the repo root, since it reads/writes `csv_files/` using relative paths.
-Set your roster size and budget in the sidebar and click **Start Draft**, then log
-picks as they happen — the optimal remaining lineup, max bid per player, and
+Set your starter counts, bench counts, and budget in the sidebar and click
+**Start Draft**. Unlike `ff.py`'s notebook workflow — which optimizes starters first
+and only figures out the bench afterward via a separate `bench_opt()` call — the GUI
+solves for your whole roster (starters + bench) in one continuous optimization from
+the start, so the optimizer reserves realistic budget for bench depth throughout the
+draft instead of bolting it on at the end. The Draft Board splits the recommended
+roster into Starter/Bench by ranking each position's players by points — that
+split is a display label only, since the optimizer itself doesn't tag slot roles.
+Log picks as they happen — the recommended roster, max bid per player, and
 score-dropoff-if-outbid all recompute live. The **League** tab tracks every team's
 roster, spend, and projected points the same way, assuming everyone drafts with the
 budget you configured.

@@ -14,20 +14,53 @@ POSITIONS = ["QB", "RB", "WR", "TE", "DST"]
 
 # ---------- helpers that turn ff_opt's print-only methods into DataFrames ----------
 
-def lineup_df(ff):
+def _fmt_price(x):
+    return "" if pd.isna(x) else f"${int(x)}"
+
+
+def full_roster_df(ff, starters):
+    """Your whole recommended roster — players already drafted (keepers + live
+    picks) plus the optimizer's recommendation for every remaining starter and
+    bench slot — split into Starter/Bench by ranking each position's players
+    by points. The ILP itself doesn't tag slot roles; this labeling is applied
+    afterward purely for display."""
     aths, proj_points, my_total_points = ff._run_opt()
     orig = original_prices()
-    rows = []
+    pool_points = ff.df.set_index("player")["points"]
+
+    locked = league_df()
+    locked = locked[locked.team == "Evan"].copy()
+    if not locked.empty:
+        locked["status"] = "Drafted"
+        locked["proj_price"] = locked["player"].map(orig)
+        locked["adj_price"] = locked["price"]
+        locked["max_price"] = None
+        locked["score_dropoff"] = None
+    locked = locked[["pos", "player", "status", "proj_price", "adj_price",
+                      "max_price", "score_dropoff", "points"]]
+
+    rec_rows = []
     for pl, price, pos in aths:
-        diff = ff.pplim(pl, price, quiet=True)
-        max_price = ff.m(pl)
-        rows.append({
-            "pos": pos, "player": pl,
-            "proj_price": f"${int(orig.get(pl, price))}",
-            "adj_price": f"${int(price)}", "max_price": f"${int(max_price)}",
-            "score_dropoff": round(diff, 2),
+        rec_rows.append({
+            "pos": pos, "player": pl, "status": "Recommended",
+            "proj_price": orig.get(pl, price), "adj_price": price,
+            "max_price": ff.m(pl),
+            "score_dropoff": round(ff.pplim(pl, price, quiet=True), 2),
+            "points": pool_points.get(pl),
         })
-    return pd.DataFrame(rows), proj_points, my_total_points
+    recommended = pd.DataFrame(rec_rows, columns=locked.columns)
+
+    full = pd.concat([locked, recommended], ignore_index=True)
+    full["role"] = "Bench"
+    for pos, count in starters.items():
+        idx = full[full.pos == pos].sort_values("points", ascending=False).head(count).index
+        full.loc[idx, "role"] = "Starter"
+
+    for col in ["proj_price", "adj_price", "max_price"]:
+        full[col] = full[col].apply(_fmt_price)
+
+    full = full.sort_values(["role", "pos", "points"], ascending=[False, True, False])
+    return full.reset_index(drop=True), proj_points, my_total_points
 
 
 def owner_names():
@@ -149,11 +182,12 @@ def max_prices_df(ff, pos=None):
 
 # ---------- session lifecycle ----------
 
-def start_draft(setup):
+def start_draft(setup, starters):
     ff = ff_opt(**setup)
     refresh_prices(ff, setup["Budget"])
     st.session_state.ff = ff
     st.session_state.setup = setup
+    st.session_state.starters = starters
     st.session_state.log = []
 
 
@@ -188,11 +222,18 @@ with st.sidebar:
 
     if st.session_state.ff is None:
         with st.form("setup_form"):
+            st.markdown("**Starters**")
             qb = st.number_input("QB", 0, 5, 1)
             rb = st.number_input("RB", 0, 8, 3)
             wr = st.number_input("WR", 0, 8, 3)
             te = st.number_input("TE", 0, 5, 1)
             dst = st.number_input("DST", 0, 3, 1)
+            st.markdown("**Bench (additional slots)**")
+            qb_b = st.number_input("QB bench", 0, 10, 1)
+            rb_b = st.number_input("RB bench", 0, 10, 2)
+            wr_b = st.number_input("WR bench", 0, 10, 2)
+            te_b = st.number_input("TE bench", 0, 10, 1)
+            dst_b = st.number_input("DST bench", 0, 5, 0)
             budget = st.number_input("Budget", 1, 1000, 189)
             process_keepers = st.checkbox(
                 "Process keepers (csv_files/keepers.csv)", value=True)
@@ -201,10 +242,12 @@ with st.sidebar:
                 value=True)
             submitted = st.form_submit_button("Start Draft", type="primary")
         if submitted:
-            setup = dict(QB=qb, RB=rb, WR=wr, TE=te, DST=dst, Budget=budget,
+            starters = dict(QB=qb, RB=rb, WR=wr, TE=te, DST=dst)
+            setup = dict(QB=qb + qb_b, RB=rb + rb_b, WR=wr + wr_b,
+                         TE=te + te_b, DST=dst + dst_b, Budget=budget,
                          process_keepers=process_keepers, restore=restore)
             try:
-                start_draft(setup)
+                start_draft(setup, starters)
             except Exception as e:
                 st.error(f"Couldn't start draft: {e}")
             else:
@@ -323,14 +366,17 @@ else:
         left, right = st.columns([2, 1])
 
         with left:
-            st.subheader("Current optimal lineup")
-            df, proj_points, my_total_points = lineup_df(ff)
+            st.subheader("Current optimal roster (starters + bench)")
+            st.caption(
+                "Starter/Bench is a display label only — ranked by points per "
+                "position — the optimizer just fills the full roster.")
+            df, proj_points, my_total_points = full_roster_df(ff, st.session_state.starters)
             if df.empty:
                 st.info("No players left to draft — roster is full or pool is empty.")
             else:
                 st.dataframe(df, hide_index=True, use_container_width=True)
             m1, m2 = st.columns(2)
-            m1.metric("Points if this lineup drafts as shown", f"{proj_points:.1f}")
+            m1.metric("Points still to be drafted", f"{proj_points:.1f}")
             m2.metric("My total projected points", f"{my_total_points:.1f}")
 
         with right:
