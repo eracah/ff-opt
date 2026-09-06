@@ -41,14 +41,17 @@ together.
 
 The sidebar's **Mode** switch picks between:
 
-* **Live Draft** — the auction-day tool described above. Expects the headerless
-  CSV formats documented below.
-* **Keeper Simulator** — a standalone, pre-draft what-if tool (see below). Reads
-  `price_proj.csv`/`keepers.csv` in a different, header-having, `$`-prefixed format
-  than Live Draft expects — **the two modes currently need differently-formatted
-  files**, so if you've refreshed `csv_files/` for keeper planning, Live Draft mode
-  won't parse it correctly until those files are put back in the plain headerless
-  format (or the Live Draft parsing is updated to match — not done yet).
+* **Live Draft** — the auction-day tool described above. `price_proj.csv` can be
+  either the plain headerless format or the headered/`$`-prefixed format (pandas'
+  header inference and `$`-stripping handle both transparently) — just make sure
+  every row has a `points` value, since a blank one used to crash the solver
+  outright (fixed by zero-filling on load, but still worth keeping data clean).
+  `process_keepers` now reads `keepers.csv` as the same full per-team roster dump
+  the Keeper Simulator uses (see below) and applies the same top-3-by-keeper-value
+  rule to decide who's actually kept, for every team including yours — override
+  any pick you disagree with afterward via `i_got`/`they_got` in the GUI.
+* **Keeper Simulator** — a standalone, pre-draft what-if tool (see below). Doesn't
+  touch live draft state.
 
 ### Keeper Simulator
 
@@ -77,17 +80,23 @@ rows, so the simulator can't recommend a defense.
 
 ### CSV files used by Live Draft (in `csv_files/`)
 
-All files are headerless CSVs.
-
-* **`price_proj.csv`** (required) — the full player pool: `player,pos,price,points`
-  (`price` is the projected auction price, `points` the projected season points).
-  This is the data the optimizer solves over.
-* **`keepers.csv`** (optional) — pre-drafted keepers to apply before the live draft
-  starts: `player,price,team`. `team` must be exactly `Evan` for a row to count as
-  *your* keeper (budget/roster slot deducted, points credited); any other value is
-  treated as an opponent's keeper (player just removed from the pool). That name is
-  hardcoded in `ff.py`'s `process_keepers` — edit it there if you're running this
-  under a different name.
+* **`price_proj.csv`** (required) — the full player pool: `player,pos,price,points`,
+  headerless or headered/`$`-prefixed (both work). `price` is the projected auction
+  price, `points` the projected season points — this is what the optimizer solves
+  over.
+* **`keepers.csv`** (optional) — a full per-team roster dump with keeper economics
+  already computed: `Fantasy Team, Player, Position, ESPN Price, Actual Paid,
+  2027 Keeper Cost, Keeper Value, Savings` (header row, `$`-prefixed, blank
+  separator rows between teams all handled automatically). `process_keepers` decides
+  who's kept — each team's top 3 by `Keeper Value` among those non-negative — and
+  applies it before the live draft starts, using `2027 Keeper Cost` as the price
+  paid. `Fantasy Team` must read exactly `Evan` for a row to count as *your* roster;
+  that name is hardcoded in `ff.py` — edit it there if you're running this under a
+  different name. `csv_files/keeper_sim.csv`, if `ff.py`'s `_set_up` is pointed at
+  it instead of `price_proj.csv`, is a plain headerless `player,pos,price,points`
+  snapshot of one specific keeper scenario (opponent keepers already removed,
+  candidate players priced at keeper cost) — handy for sanity-checking one scenario
+  through the normal Live Draft flow instead of the Keeper Simulator's editable UI.
 * **`my_team.csv`** / **`their_team.csv`** (auto-generated) — the app appends to
   these as you record picks (`player,price` and `player` respectively), so you can
   close and reopen the app mid-draft. Check "Resume from saved picks" in the sidebar
