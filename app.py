@@ -5,11 +5,20 @@ Streamlit GUI for ff_opt — run with:
 import pandas as pd
 import streamlit as st
 
+import keeper_sim
 from ff import ff_opt
 
 st.set_page_config(page_title="FF Auction Draft Optimizer", layout="wide")
 
 POSITIONS = ["QB", "RB", "WR", "TE", "DST"]
+
+with st.sidebar:
+    app_mode = st.radio("Mode", ["Live Draft", "Keeper Simulator"], key="app_mode")
+    st.divider()
+
+if app_mode == "Keeper Simulator":
+    keeper_sim.render()
+    st.stop()
 
 
 # ---------- helpers that turn ff_opt's print-only methods into DataFrames ----------

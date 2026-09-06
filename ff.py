@@ -15,15 +15,19 @@ warnings.filterwarnings("ignore")
 #write code to add certain draft picks to your bench
 
 class ff_opt(object):
-    def __init__(self, QB=1, RB=3, WR=3, TE=1, DST=1, Budget=189, process_keepers=True, restore=False):
+    def __init__(self, QB=2, RB=3, WR=3, TE=1, DST=1, Budget=186, process_keepers=False, restore=False):
         self._set_up(QB, RB, WR, TE, DST, Budget, process_keepers, restore)
 
     def _set_up(self,QB=1, RB=3, WR=3, TE=1, DST=1, Budget=189, process_keepers=True, restore=False):
         Tot = QB + RB + WR + TE + DST
         self.row_dict = dict(QB=QB, RB=RB, WR=WR, TE=TE,DST=DST, Budget=Budget, Tot=Tot)
-        price_projs = pd.read_csv("csv_files/price_proj.csv",
+        price_projs = pd.read_csv("csv_files/keeper_sim.csv",
                             names=["player","pos", "price","points"],
                             usecols=["player","pos", "price","points"])
+        # a NaN objective coefficient (e.g. a blank projection for a deep-bench
+        # player) crashes glpk's C solver outright instead of raising a
+        # catchable Python error, so zero-fill before it ever reaches glp_intopt
+        price_projs[["price", "points"]] = price_projs[["price", "points"]].fillna(0)
         self.df = price_projs
         self.my_points = 0
         self.run_opt(quiet=True)
@@ -100,18 +104,31 @@ class ff_opt(object):
         return aths, proj_points, my_total_points
         
 
-    def process_keepers(self, keeper_file):
+    def process_keepers(self, keeper_file, max_keepers=3):
         print("processing keepers...")
-        with open(keeper_file, 'r') as csvfile:
-            reader = csv.reader(csvfile, delimiter=',')
-            for idx, row in enumerate(reader):
-                player, price, team = row
-                price = int(price)
-                if team == 'Evan':
-                    print('\t *', player)
-                    self.i_got(player, price, quiet=True, write=False)
-                else:
-                    self.they_got(player, quiet=True, write=False)
+        # keepers.csv is now a full per-team roster dump (every 2026 player,
+        # not just decided keepers) with keeper economics already computed, so
+        # decide who's actually kept here: each team's top max_keepers players
+        # by keeper value (ESPN price - 2027 keeper cost), among those where
+        # that value is non-negative.
+        df = pd.read_csv(keeper_file, header=0, usecols=[0, 1, 2, 3, 4, 5, 6, 7],
+                          names=["team", "player", "pos", "espn_price", "actual_paid",
+                                 "keeper_cost", "keeper_value", "savings"])
+        df = df.dropna(subset=["team", "player"])
+        for col in ["espn_price", "actual_paid", "keeper_cost", "keeper_value", "savings"]:
+            df[col] = df[col].astype(str).str.replace(r"[^0-9.\-]", "", regex=True).astype(float)
+
+        qualifying = df[df.keeper_value >= 0]
+        kept = (qualifying.sort_values("keeper_value", ascending=False)
+                .groupby("team", group_keys=False).head(max_keepers))
+
+        for _, row in kept.iterrows():
+            price = int(round(row.keeper_cost))
+            if row.team == 'Evan':
+                print('\t *', row.player)
+                self.i_got(row.player, price, quiet=True, write=False)
+            else:
+                self.they_got(row.player, quiet=True, write=False)
         print("After keepers optimal lineup to draft is:\n")
         self.run_opt()
 
@@ -340,7 +357,7 @@ class ff_opt(object):
 if __name__ == "__main__":
     ff = ff_opt()
     # ff.restore()
-    # ff.run_opt()
+    ff.run_opt()
     # ff.i_got("DakPrescott",5)
     # ff.they_got("DeshaunWatson")
     # ff.they_got("KylerMurray")
