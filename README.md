@@ -37,7 +37,45 @@ column (from `price_proj.csv`) is shown alongside `adj_price` wherever both are
 relevant, so you can see the pre-draft estimate and the live-adjusted number
 together.
 
-### CSV files (in `csv_files/`)
+### Modes
+
+The sidebar's **Mode** switch picks between:
+
+* **Live Draft** — the auction-day tool described above. Expects the headerless
+  CSV formats documented below.
+* **Keeper Simulator** — a standalone, pre-draft what-if tool (see below). Reads
+  `price_proj.csv`/`keepers.csv` in a different, header-having, `$`-prefixed format
+  than Live Draft expects — **the two modes currently need differently-formatted
+  files**, so if you've refreshed `csv_files/` for keeper planning, Live Draft mode
+  won't parse it correctly until those files are put back in the plain headerless
+  format (or the Live Draft parsing is updated to match — not done yet).
+
+### Keeper Simulator
+
+A pre-draft tool to answer two questions: what will opponents likely keep, and are
+your own keeper prices actually worth it? It doesn't touch any live draft state
+(`my_team.csv`, `their_team.csv`, etc.) — it's a sandboxed simulation.
+
+1. **Predicts opponent keepers**: for every team but you, it keeps up to 3 players
+   (your league's keeper cap) — whichever have the best keeper value (`ESPN Price -
+   2027 Keeper Cost`), among those where that value is non-negative — and removes
+   them from the simulated pool.
+2. **Tests your own keepers**: shows all of your rostered players in an editable
+   table (defaulting to each one's `2027 Keeper Cost`, which you can override) and
+   runs the same combined starters+bench optimizer used in Live Draft, from an empty
+   roster, over the full 2027 pool minus the predicted opponent keepers. Whichever of
+   your candidates the optimizer actually selects — at the price you tested — are
+   worth keeping at that price; if more than 3 clear the bar, pick your best 3.
+
+It reads `csv_files/keepers.csv` as a full per-team roster dump (not just decided
+keepers) with columns `Fantasy Team, Player, Position, ESPN Price, Actual Paid,
+2027 Keeper Cost, Keeper Value, Savings` (a header row, `$`-prefixed dollar amounts,
+blank separator rows between teams — all handled automatically), and
+`csv_files/price_proj.csv` as `Player Name, Position, Average Value, Projection`
+(also headered/`$`-prefixed). Note: this price_proj.csv format currently has no DST
+rows, so the simulator can't recommend a defense.
+
+### CSV files used by Live Draft (in `csv_files/`)
 
 All files are headerless CSVs.
 
